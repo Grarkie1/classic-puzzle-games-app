@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Classic Puzzle Games</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f9fafb;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 4px;
+      background-color: #e5e7eb;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tab.active {
+      background-color: #3b82f6;
+      color: #ffffff;
+    }
+    .controls {
+      margin-bottom: 8px;
+    }
+    .button {
+      padding: 6px 10px;
+      margin-right: 6px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background-color: #e5e7eb;
+    }
+    .button.primary {
+      background-color: #10b981;
+      color: #ffffff;
+    }
+    .button.secondary {
+      background-color: #f59e0b;
+      color: #ffffff;
+    }
+    /* Chess styles */
+    .chess-board {
+      display: grid;
+      grid-template-columns: repeat(8, 40px);
+      grid-template-rows: repeat(8, 40px);
+      border: 2px solid #374151;
+      margin-bottom: 8px;
+    }
+    .chess-square {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .light {
+      background-color: #f0d9b5;
+    }
+    .dark {
+      background-color: #b58863;
+    }
+    .chess-square.selected {
+      outline: 2px solid #facc15;
+      z-index: 1;
+    }
+    .chess-square.move-option {
+      background-color: #a7f3d0;
+    }
+    .history {
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      background-color: #f9fafb;
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+    }
+    /* Sudoku styles */
+    .sudoku-board {
+      display: inline-block;
+      border: 2px solid #374151;
+      margin-top: 8px;
+    }
+    .sudoku-row {
+      display: flex;
+    }
+    .sudoku-cell {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #d1d5db;
+      font-size: 18px;
+      position: relative;
+      cursor: pointer;
+    }
+    .sudoku-cell.given {
+      background-color: #e5e7eb;
+      font-weight: bold;
+    }
+    .sudoku-cell.selected {
+      background-color: #fde68a;
+    }
+    .sudoku-cell .notes {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      font-size: 10px;
+      color: #6b7280;
+    }
+    /* Solitaire styles */
+    .solitaire-area {
+      margin-top: 8px;
+    }
+    .foundations, .stock-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .foundation, .stock, .waste {
+      width: 80px;
+      height: 120px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .foundation {
+      background-color: #f3f4f6;
+    }
+    .stock {
+      background-color: #9ca3af;
+      cursor: pointer;
+    }
+    .waste {
+      background-color: #f3f4f6;
+    }
+    .tableaus {
+      display: flex;
+      gap: 8px;
+    }
+    .tableau {
+      position: relative;
+      width: 80px;
+      min-height: 120px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background-color: #f3f4f6;
+    }
+    .card {
+      width: 80px;
+      height: 120px;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      background-color: #ffffff;
+      color: #111827;
+      font-weight: bold;
+    }
+    .card.back {
+      background-color: #9ca3af;
+      color: transparent;
+    }
+    .card.selected {
+      box-shadow: 0 0 0 3px #facc15 inset;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- React and ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Chess.js library -->
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0/chess.min.js"></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Our application script -->
+  <script type="text/babel" data-presets="react">
+  const { useState, useEffect } = React;
+
+    // Ensure Chess constructor is available in this scope
+    const Chess = window.Chess;
+
+  /* Utility functions for Sudoku */
+  function shuffle(array) {
+    let arr = array.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function isValid(board, row, col, num) {
+    for (let x = 0; x < 9; x++) {
+      if (board[row][x] === num || board[x][col] === num) return false;
+    }
+    const startRow = Math.floor(row / 3) * 3;
+    const startCol = Math.floor(col / 3) * 3;
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (board[startRow + r][startCol + c] === num) return false;
+      }
+    }
+    return true;
+  }
+
+  function solveSudokuBoard(board) {
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (board[row][col] === 0) {
+          for (let num = 1; num <= 9; num++) {
+            if (isValid(board, row, col, num)) {
+              board[row][col] = num;
+              if (solveSudokuBoard(board)) return true;
+              board[row][col] = 0;
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function copyBoard(board) {
+    return board.map(row => row.slice());
+  }
+
+  function generateSudoku() {
+    let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+    // fill diagonal 3x3 boxes
+    const fillBox = (row, col) => {
+      let nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      let idx = 0;
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          board[row + r][col + c] = nums[idx++];
+        }
+      }
+    };
+    fillBox(0, 0);
+    fillBox(3, 3);
+    fillBox(6, 6);
+    solveSudokuBoard(board);
+    let solution = copyBoard(board);
+    // remove numbers to create puzzle
+    let attempts = 3;
+    let puzzle = copyBoard(board);
+    while (attempts > 0) {
+      let row = Math.floor(Math.random() * 9);
+      let col = Math.floor(Math.random() * 9);
+      while (puzzle[row][col] === 0) {
+        row = Math.floor(Math.random() * 9);
+        col = Math.floor(Math.random() * 9);
+      }
+      const backup = puzzle[row][col];
+      puzzle[row][col] = 0;
+      let copy = copyBoard(puzzle);
+      let solved = solveSudokuBoard(copy);
+      if (!solved) {
+        puzzle[row][col] = backup;
+        attempts--;
+      }
+    }
+    return { puzzle, solution };
+  }
+
+  /* Sudoku Game Component */
+  function SudokuGame() {
+    const [puzzleData, setPuzzleData] = useState(() => {
+      const { puzzle, solution } = generateSudoku();
+      const notes = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
+      return {
+        puzzle,
+        solution,
+        board: puzzle.map(row => row.slice()),
+        notes,
+      };
+    });
+    const [selected, setSelected] = useState(null);
+    const [notesMode, setNotesMode] = useState(false);
+
+    const newPuzzle = () => {
+      const { puzzle, solution } = generateSudoku();
+      const notes = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
+      setPuzzleData({
+        puzzle,
+        solution,
+        board: puzzle.map(row => row.slice()),
+        notes,
+      });
+      setSelected(null);
+    };
+
+    const handleCellClick = (r, c) => {
+      if (puzzleData.puzzle[r][c] !== 0) return;
+      setSelected({ r, c });
+    };
+
+    const handleNumberClick = (num) => {
+      if (!selected) return;
+      const { r, c } = selected;
+      if (puzzleData.puzzle[r][c] !== 0) return;
+      if (notesMode) {
+        const newNotes = puzzleData.notes.map(row => row.map(set => new Set([...set])));
+        if (newNotes[r][c].has(num)) {
+          newNotes[r][c].delete(num);
+        } else {
+          newNotes[r][c].add(num);
+        }
+        setPuzzleData({ ...puzzleData, notes: newNotes });
+      } else {
+        const newBoard = puzzleData.board.map(row => row.slice());
+        newBoard[r][c] = num;
+        const newNotes = puzzleData.notes.map(row => row.map(set => new Set([...set])));
+        newNotes[r][c].clear();
+        setPuzzleData({ ...puzzleData, board: newBoard, notes: newNotes });
+      }
+    };
+
+    const handleSolve = () => {
+      const solved = puzzleData.solution.map(row => row.slice());
+      const notes = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
+      setPuzzleData({ ...puzzleData, board: solved, notes });
+      setSelected(null);
+    };
+
+    const handleHint = () => {
+      // find first empty cell and fill with solution
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (puzzleData.puzzle[r][c] === 0 && puzzleData.board[r][c] === 0) {
+            const val = puzzleData.solution[r][c];
+            const newBoard = puzzleData.board.map(row => row.slice());
+            newBoard[r][c] = val;
+            const newNotes = puzzleData.notes.map(row => row.map(set => new Set([...set])));
+            newNotes[r][c].clear();
+            setPuzzleData({ ...puzzleData, board: newBoard, notes: newNotes });
+            return;
+          }
+        }
+      }
+    };
+
+    const numberPad = [1,2,3,4,5,6,7,8,9];
+
+    return (
+      <div>
+        <div className="controls">
+          <button className="button primary" onClick={newPuzzle}>New Puzzle</button>
+          <button className="button" onClick={() => setNotesMode(!notesMode)}>
+            Notes: {notesMode ? 'On' : 'Off'}
+          </button>
+          <button className="button secondary" onClick={handleHint}>Hint</button>
+          <button className="button secondary" onClick={handleSolve}>Solve</button>
+        </div>
+        <div className="sudoku-board">
+          {puzzleData.board.map((row, r) => (
+            <div className="sudoku-row" key={r}>
+              {row.map((val, c) => {
+                const given = puzzleData.puzzle[r][c] !== 0;
+                const isSelected = selected && selected.r === r && selected.c === c;
+                // Determine thick borders for 3x3 boxes
+                const borderStyles = {};
+                if (c % 3 === 0) borderStyles.borderLeftWidth = '2px';
+                if (r % 3 === 0) borderStyles.borderTopWidth = '2px';
+                if (c === 8) borderStyles.borderRightWidth = '2px';
+                if (r === 8) borderStyles.borderBottomWidth = '2px';
+                return (
+                  <div
+                    key={c}
+                    className={
+                      'sudoku-cell' +
+                      (given ? ' given' : '') +
+                      (isSelected ? ' selected' : '')
+                    }
+                    style={borderStyles}
+                    onClick={() => handleCellClick(r, c)}
+                  >
+                    {val !== 0 && <span>{val}</span>}
+                    {puzzleData.notes[r][c].size > 0 && (
+                      <div className="notes">
+                        {[...puzzleData.notes[r][c]].sort((a,b) => a - b).join('')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: '8px' }}>
+          {numberPad.map(num => (
+            <button
+              key={num}
+              className="button"
+              onClick={() => handleNumberClick(num)}
+            >
+              {num}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* Chess Game Component */
+  function ChessGame() {
+    const [game, setGame] = useState(() => new Chess());
+    const [orientation, setOrientation] = useState('white');
+    const [selectedSquare, setSelectedSquare] = useState(null);
+    const [moveOptions, setMoveOptions] = useState([]);
+    const [history, setHistory] = useState([]);
+
+    useEffect(() => {
+      setHistory(game.history({ verbose: true }));
+    }, [game]);
+
+    const pieceSymbols = {
+      p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚',
+      P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔',
+    };
+
+    const getSquareName = (rowIndex, colIndex) => {
+      const files = ['a','b','c','d','e','f','g','h'];
+      if (orientation === 'white') {
+        const file = files[colIndex];
+        const rank = 8 - rowIndex;
+        return file + rank;
+      } else {
+        const file = files[7 - colIndex];
+        const rank = rowIndex + 1;
+        return file + rank;
+      }
+    };
+
+    const handleSquareClick = (rowIndex, colIndex) => {
+      const square = getSquareName(rowIndex, colIndex);
+      const piece = game.get(square);
+      if (selectedSquare) {
+        // if clicked a move option, move piece
+        if (moveOptions.includes(square)) {
+          const move = { from: selectedSquare, to: square };
+          // always promote to queen for simplicity
+          const promotionMoves = game.moves({ square: selectedSquare, verbose: true })
+            .filter(m => m.to === square && m.promotion);
+          if (promotionMoves.length > 0) {
+            move.promotion = 'q';
+          }
+          game.move(move);
+          setGame(new Chess(game.fen()));
+          setSelectedSquare(null);
+          setMoveOptions([]);
+          setTimeout(() => {
+            // AI move
+            if (!game.game_over()) {
+              const [_, bestMove] = minimax(2, game, false);
+              if (bestMove) {
+                game.move(bestMove);
+                setGame(new Chess(game.fen()));
+              }
+            }
+          }, 100);
+          return;
+        } else {
+          // deselect or select new piece
+          if (piece && piece.color === game.turn()) {
+            setSelectedSquare(square);
+            const moves = game.moves({ square, verbose: true });
+            setMoveOptions(moves.map(m => m.to));
+          } else {
+            setSelectedSquare(null);
+            setMoveOptions([]);
+          }
+          return;
+        }
+      } else {
+        // no selection yet
+        if (piece && piece.color === game.turn()) {
+          setSelectedSquare(square);
+          const moves = game.moves({ square, verbose: true });
+          setMoveOptions(moves.map(m => m.to));
+        }
+      }
+    };
+
+    const getBoardForDisplay = () => {
+      let board = game.board();
+      if (orientation === 'white') {
+        return board;
+      } else {
+        return board.slice().reverse().map(row => row.slice().reverse());
+      }
+    };
+
+    const newGame = () => {
+      const ng = new Chess();
+      setGame(ng);
+      setSelectedSquare(null);
+      setMoveOptions([]);
+      setHistory([]);
+    };
+
+    const flipBoard = () => {
+      setOrientation(orientation === 'white' ? 'black' : 'white');
+    };
+
+    /* Evaluation and minimax for AI */
+    const weights = { p: 1, n: 3, b: 3.25, r: 5, q: 9, k: 0 };
+
+    const evaluateBoard = (g) => {
+      let total = 0;
+      const b = g.board();
+      for (let row of b) {
+        for (let piece of row) {
+          if (piece) {
+            const value = weights[piece.type];
+            total += piece.color === 'w' ? value : -value;
+          }
+        }
+      }
+      return total;
+    };
+
+    const minimax = (depth, g, isMaximizing) => {
+      if (depth === 0 || g.game_over()) {
+        return [evaluateBoard(g), null];
+      }
+      const moves = g.moves();
+      let bestMove = null;
+      if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (let m of moves) {
+          const next = new Chess(g.fen());
+          next.move(m);
+          const [evalScore] = minimax(depth - 1, next, false);
+          if (evalScore > maxEval) {
+            maxEval = evalScore;
+            bestMove = m;
+          }
+        }
+        return [maxEval, bestMove];
+      } else {
+        let minEval = Infinity;
+        for (let m of moves) {
+          const next = new Chess(g.fen());
+          next.move(m);
+          const [evalScore] = minimax(depth - 1, next, true);
+          if (evalScore < minEval) {
+            minEval = evalScore;
+            bestMove = m;
+          }
+        }
+        return [minEval, bestMove];
+      }
+    };
+
+    return (
+      <div>
+        <div className="controls">
+          <button className="button primary" onClick={newGame}>New Game</button>
+          <button className="button" onClick={flipBoard}>Flip Board</button>
+        </div>
+        <div className="chess-board">
+          {getBoardForDisplay().map((row, rowIndex) => (
+            row.map((piece, colIndex) => {
+              const square = getSquareName(rowIndex, colIndex);
+              const isMove = moveOptions.includes(square);
+              const isSelected = selectedSquare === square;
+              const dark = (rowIndex + colIndex) % 2 === 1;
+              const classes = 
+                'chess-square ' +
+                (dark ? 'dark' : 'light') +
+                (isSelected ? ' selected' : '') +
+                (isMove ? ' move-option' : '');
+              let symbol = '';
+              if (piece) {
+                const key = piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
+                symbol = pieceSymbols[key];
+              }
+              return (
+                <div
+                  key={rowIndex + '-' + colIndex}
+                  className={classes}
+                  onClick={() => handleSquareClick(rowIndex, colIndex)}
+                >
+                  {symbol}
+                </div>
+              );
+            })
+          ))}
+        </div>
+        <div className="history">
+          {game.pgn()}
+        </div>
+      </div>
+    );
+  }
+
+  /* Solitaire Game Component */
+  function SolitaireGame() {
+    const suits = ['♠','♣','♥','♦'];
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+    const getColor = (suit) => {
+      return (suit === '♠' || suit === '♣') ? 'black' : 'red';
+    };
+
+    const getValue = (rank) => {
+      if (rank === 'A') return 1;
+      if (rank === 'J') return 11;
+      if (rank === 'Q') return 12;
+      if (rank === 'K') return 13;
+      return parseInt(rank, 10);
+    };
+
+    const shuffleDeck = () => {
+      let deck = [];
+      for (let suit of suits) {
+        for (let rank of ranks) {
+          deck.push({ suit, rank, faceUp: false });
+        }
+      }
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
+    };
+
+    const dealCards = () => {
+      const deck = shuffleDeck();
+      const tableaus = [];
+      for (let i = 0; i < 7; i++) {
+        const col = [];
+        for (let j = 0; j <= i; j++) {
+          const card = deck.shift();
+          card.faceUp = (j === i);
+          col.push(card);
+        }
+        tableaus.push(col);
+      }
+      const stock = deck;
+      return { tableaus, stock, waste: [], foundations: [[],[],[],[]] };
+    };
+
+    const [game, setGame] = useState(() => dealCards());
+    const [selection, setSelection] = useState(null);
+
+    const newSolitaire = () => {
+      setGame(dealCards());
+      setSelection(null);
+    };
+
+    const canPlaceOnTableau = (destCard, movingCard) => {
+      if (!destCard) {
+        // empty column: only king can be placed
+        return getValue(movingCard.rank) === 13;
+      }
+      const destVal = getValue(destCard.rank);
+      const movingVal = getValue(movingCard.rank);
+      const destColor = getColor(destCard.suit);
+      const movingColor = getColor(movingCard.suit);
+      return destVal === movingVal + 1 && destColor !== movingColor;
+    };
+
+    const canPlaceOnFoundation = (foundation, card) => {
+      if (foundation.length === 0) {
+        return getValue(card.rank) === 1; // Ace
+      }
+      const top = foundation[foundation.length - 1];
+      return top.suit === card.suit && getValue(card.rank) === getValue(top.rank) + 1;
+    };
+
+    const handleStockClick = () => {
+      if (game.stock.length > 0) {
+        const card = game.stock.shift();
+        card.faceUp = true;
+        setGame({
+          ...game,
+          stock: game.stock,
+          waste: [...game.waste, card],
+        });
+        setSelection(null);
+      } else {
+        // reset waste to stock
+        const newStock = game.waste.map(card => ({...card, faceUp: false})).reverse();
+        setGame({
+          ...game,
+          stock: newStock,
+          waste: [],
+        });
+        setSelection(null);
+      }
+    };
+
+    const handleWasteClick = () => {
+      if (game.waste.length === 0) return;
+      const topCard = game.waste[game.waste.length - 1];
+      if (selection && selection.type === 'waste') {
+        setSelection(null);
+      } else {
+        setSelection({ type: 'waste', card: topCard });
+      }
+    };
+
+    const handleTableauClick = (colIndex, cardIndex) => {
+      const column = game.tableaus[colIndex];
+      const card = column[cardIndex];
+      if (!card.faceUp) {
+        // if face down and top of stack, flip it if there is no selection
+        if (cardIndex === column.length - 1 && !selection) {
+          card.faceUp = true;
+          setGame({ ...game, tableaus: game.tableaus });
+        }
+        return;
+      }
+      if (!selection) {
+        // select cards from cardIndex to end
+        const cards = column.slice(cardIndex);
+        setSelection({ type: 'tableau', col: colIndex, cards });
+      } else {
+        // attempt to place selection on this column
+        const movingCards = selection.cards || [selection.card];
+        const movingCard = movingCards[0];
+        const destCard = column.length ? column[column.length - 1] : null;
+        if (canPlaceOnTableau(destCard, movingCard)) {
+          // move cards
+          if (selection.type === 'tableau') {
+            const fromCol = selection.col;
+            const newFrom = game.tableaus[fromCol].slice(0, game.tableaus[fromCol].length - movingCards.length);
+            const newTo = game.tableaus[colIndex].concat(movingCards);
+            const newTableaus = game.tableaus.slice();
+            newTableaus[fromCol] = newFrom;
+            newTableaus[colIndex] = newTo;
+            // flip top card in from column if needed
+            if (newFrom.length > 0 && !newFrom[newFrom.length - 1].faceUp) {
+              newFrom[newFrom.length - 1].faceUp = true;
+            }
+            setGame({ ...game, tableaus: newTableaus });
+            setSelection(null);
+          } else if (selection.type === 'waste') {
+            const newWaste = game.waste.slice(0, game.waste.length - 1);
+            const newTo = game.tableaus[colIndex].concat([selection.card]);
+            const newTableaus = game.tableaus.slice();
+            newTableaus[colIndex] = newTo;
+            setGame({ ...game, tableaus: newTableaus, waste: newWaste });
+            setSelection(null);
+          }
+        } else {
+          // if invalid, new selection
+          if (card.faceUp) {
+            const cards = column.slice(cardIndex);
+            setSelection({ type: 'tableau', col: colIndex, cards });
+          } else {
+            setSelection(null);
+          }
+        }
+      }
+    };
+
+    const handleFoundationClick = (fIndex) => {
+      if (!selection) return;
+      let movingCard = selection.card || selection.cards[0];
+      if (!canPlaceOnFoundation(game.foundations[fIndex], movingCard)) {
+        setSelection(null);
+        return;
+      }
+      // move single card
+      if (selection.type === 'tableau') {
+        // only single card can go to foundation
+        if (selection.cards.length !== 1) {
+          setSelection(null);
+          return;
+        }
+        const fromCol = selection.col;
+        const newFrom = game.tableaus[fromCol].slice(0, game.tableaus[fromCol].length - 1);
+        const newFound = game.foundations.slice();
+        newFound[fIndex] = newFound[fIndex].concat([movingCard]);
+        // flip top card in from column if needed
+        if (newFrom.length > 0 && !newFrom[newFrom.length - 1].faceUp) {
+          newFrom[newFrom.length - 1].faceUp = true;
+        }
+        setGame({
+          ...game,
+          tableaus: game.tableaus.map((col, idx) => idx === fromCol ? newFrom : col),
+          foundations: newFound,
+        });
+        setSelection(null);
+      } else if (selection.type === 'waste') {
+        const newWaste = game.waste.slice(0, game.waste.length - 1);
+        const newFound = game.foundations.slice();
+        newFound[fIndex] = newFound[fIndex].concat([movingCard]);
+        setGame({
+          ...game,
+          waste: newWaste,
+          foundations: newFound,
+        });
+        setSelection(null);
+      }
+    };
+
+    return (
+      <div className="solitaire-area">
+        <div className="controls">
+          <button className="button primary" onClick={newSolitaire}>New Game</button>
+        </div>
+        <div className="stock-row">
+          <div className="stock" onClick={handleStockClick}>
+            {game.stock.length > 0 && <div></div>}
+          </div>
+          <div className="waste" onClick={handleWasteClick}>
+            {game.waste.length > 0 && (
+              <div
+                className={
+                  'card' +
+                  (selection && selection.type === 'waste' ? ' selected' : '')
+                }
+                style={{ position: 'relative' }}
+              >
+                {game.waste[game.waste.length - 1].rank}
+                <span style={{ color: getColor(game.waste[game.waste.length - 1].suit) }}>
+                  {game.waste[game.waste.length - 1].suit}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="foundations">
+          {game.foundations.map((f, idx) => (
+            <div key={idx} className="foundation" onClick={() => handleFoundationClick(idx)}>
+              {f.length > 0 && (
+                <div className="card" style={{ position:'relative' }}>
+                  {f[f.length - 1].rank}
+                  <span style={{ color: getColor(f[f.length - 1].suit) }}>
+                    {f[f.length - 1].suit}
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="tableaus">
+          {game.tableaus.map((col, colIndex) => (
+            <div key={colIndex} className="tableau" onClick={(e) => {
+              // clicking empty space should handle selection only if clicking on the column with no cards
+              if (e.target === e.currentTarget) {
+                if (selection) {
+                  // attempt to place selection on empty column
+                  const destCard = null;
+                  const movingCard = (selection.card || selection.cards[0]);
+                  if (canPlaceOnTableau(destCard, movingCard)) {
+                    // move
+                    if (selection.type === 'tableau') {
+                      const fromCol = selection.col;
+                      const movingCards = selection.cards;
+                      const newFrom = game.tableaus[fromCol].slice(0, game.tableaus[fromCol].length - movingCards.length);
+                      const newTableaus = game.tableaus.slice();
+                      newTableaus[fromCol] = newFrom;
+                      newTableaus[colIndex] = newTableaus[colIndex].concat(movingCards);
+                      // flip top card in from column if needed
+                      if (newFrom.length > 0 && !newFrom[newFrom.length - 1].faceUp) {
+                        newFrom[newFrom.length - 1].faceUp = true;
+                      }
+                      setGame({ ...game, tableaus: newTableaus });
+                      setSelection(null);
+                    } else if (selection.type === 'waste') {
+                      const newWaste = game.waste.slice(0, game.waste.length - 1);
+                      const newTableaus = game.tableaus.slice();
+                      newTableaus[colIndex] = newTableaus[colIndex].concat([selection.card]);
+                      setGame({
+                        ...game,
+                        waste: newWaste,
+                        tableaus: newTableaus,
+                      });
+                      setSelection(null);
+                    }
+                  } else {
+                    setSelection(null);
+                  }
+                }
+              }
+            }}>
+              {col.map((card, cardIndex) => {
+                const isFaceUp = card.faceUp;
+                const isSelected = selection && selection.type === 'tableau' && selection.col === colIndex && cardIndex >= (game.tableaus[colIndex].length - selection.cards.length);
+                return (
+                  <div
+                    key={cardIndex}
+                    className={
+                      'card' +
+                      (!isFaceUp ? ' back' : '') +
+                      (isSelected ? ' selected' : '')
+                    }
+                    style={{ top: (cardIndex * 24) + 'px' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTableauClick(colIndex, cardIndex);
+                    }}
+                  >
+                    {isFaceUp && (
+                      <React.Fragment>
+                        {card.rank}
+                        <span style={{ color: getColor(card.suit) }}>{card.suit}</span>
+                      </React.Fragment>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function ClassicPuzzleGames() {
+    const [tab, setTab] = useState('chess');
+    return (
+      <div>
+        <div className="tabs">
+          <div
+            className={'tab' + (tab === 'chess' ? ' active' : '')}
+            onClick={() => setTab('chess')}
+          >
+            Chess
+          </div>
+          <div
+            className={'tab' + (tab === 'sudoku' ? ' active' : '')}
+            onClick={() => setTab('sudoku')}
+          >
+            Sudoku
+          </div>
+          <div
+            className={'tab' + (tab === 'solitaire' ? ' active' : '')}
+            onClick={() => setTab('solitaire')}
+          >
+            Solitaire
+          </div>
+        </div>
+        {tab === 'chess' && <ChessGame />}
+        {tab === 'sudoku' && <SudokuGame />}
+        {tab === 'solitaire' && <SolitaireGame />}
+      </div>
+    );
+  }
+
+  ReactDOM.render(<ClassicPuzzleGames />, document.getElementById('root'));
+  </script>
+</body>
+</html>
